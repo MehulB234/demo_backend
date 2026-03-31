@@ -110,7 +110,16 @@ let catalog = [
   }
 ];
 
+app.get("/api/catalog",(req,res)=>{
+  res.send(catalog);
+});
+
+app.get("/api/catalog/:id", (req, res) => {
+  const foundCatalog = catalog.find((item) => item._id === parseInt(req.params.id));
+  res.send(foundCatalog);
+});
+
 //listen for incoming requests
-app.listen(3001); () => {
+app.listen(3001, ()=>{
   console.log("Server is up and running");
-};
+});
