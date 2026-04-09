@@ -1,17 +1,49 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <link rel="stylesheet" href="styles.css">
-    </head>
-    <body>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catalog API</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <p class="eyebrow">Game Catalog Backend</p>
         <h1>Catalog API</h1>
-        <h2> See All Games </h2>
-        <p> <a href= "/api/catalog"> /api/catalog </a></p>
+        <p class="subtitle">
+          Backend API to browse games for GamerGauntlet. 
+        </p>
+      </section>
 
-        <h2> Get Individual Game </h2>
-        <p> <a href= "/api/catalog/1"> /api/catalog/1 </a></p>
+      <section class="grid">
+        <a class="card" href="/api/catalog">
+          <div class="card-top">
+            <span class="badge">GET</span>
+            <h2>See All Games</h2>
+          </div>
+          <p>Returns the full catalog of games in JSON format.</p>
+          <code>/api/catalog</code>
+        </a>
 
-        <h2>Get Individual Image</h2>
-        <p><a href="/images/EldenRing.png">/images/EldenRing.png</a></p>
-    </body>
+        <a class="card" href="/api/catalog/1">
+          <div class="card-top">
+            <span class="badge">GET</span>
+            <h2>Get Individual Game</h2>
+          </div>
+          <p>Fetch a single game by ID with all of its details.</p>
+          <code>/api/catalog/1</code>
+        </a>
+
+        <a class="card" href="/images/EldenRing.png">
+          <div class="card-top">
+            <span class="badge badge-image">IMG</span>
+            <h2>Get Individual Image</h2>
+          </div>
+          <p>Open a game image directly from the images folder.</p>
+          <code>/images/EldenRing.png</code>
+        </a>
+      </section>
+    </main>
+  </body>
 </html>
