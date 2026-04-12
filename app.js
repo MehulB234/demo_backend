@@ -1,7 +1,9 @@
 
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
 const Joi = require("joi");
+const fs = require("fs");
 const path = require("path");
 
 const app = express();
@@ -9,6 +11,29 @@ const app = express();
 app.use(express.static("public"));
 app.use(express.json());
 app.use(cors());
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "./public/images/");
+  },
+  filename: (req, file, cb) => {
+    const safeName = path
+      .basename(file.originalname)
+      .replace(/\s+/g, "_");
+    cb(null, `${Date.now()}-${safeName}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed."));
+    }
+  },
+});
 
 let catalog = [
   {
@@ -105,7 +130,6 @@ let catalog = [
 
 const gameSchema = Joi.object({
   title: Joi.string().trim().min(2).max(60).required(),
-  img_name: Joi.string().trim().required(),
   img_alt: Joi.string().trim().min(2).max(100).required(),
   platform: Joi.string().valid("PlayStation", "Xbox", "PC").required(),
   genre: Joi.string()
@@ -115,37 +139,53 @@ const gameSchema = Joi.object({
   detail_link: Joi.string().trim().allow("").required(),
 });
 
+const deleteUploadedFile = (filePath) => {
+  if (!filePath) return;
+
+  try {
+    fs.unlinkSync(filePath);
+  } catch (err) {
+    console.warn("Could not delete uploaded file:", err.message);
+  }
+};
+
 app.get("/api/catalog", (req, res) => {
   res.send(catalog);
 });
 
 app.get("/api/catalog/:id", (req, res) => {
-  const foundCatalog = catalog.find(
-    (item) => item._id === parseInt(req.params.id)
-  );
+  const foundCatalog = catalog.find((item) => item._id === parseInt(req.params.id));
   res.send(foundCatalog);
 });
 
-app.post("/api/catalog", (req, res) => {
-  const { error, value } = gameSchema.validate(req.body, {
-    abortEarly: false,
-  });
+app.post("/api/catalog", upload.single("image"), (req, res) => {
+  const { error, value } = gameSchema.validate(req.body, { abortEarly: false });
+
+  if (!req.file) {
+    return res.status(400).json({
+      success: false,
+      errors: ["Image file is required."],
+    });
+  }
 
   if (error) {
+    deleteUploadedFile(req.file.path);
     return res.status(400).json({
       success: false,
       errors: error.details.map((detail) => detail.message),
     });
   }
 
-  const normalizedImageName = path.basename(value.img_name.trim());
-
   const newGame = {
     _id: catalog.length ? Math.max(...catalog.map((game) => game._id)) + 1 : 1,
-    ...value,
-    img_name: normalizedImageName,
+    title: value.title,
+    img_name: req.file.filename,
+    img_alt: value.img_alt,
+    platform: value.platform,
+    genre: value.genre,
     price: Number(value.price),
     price_display: `$${Number(value.price).toFixed(2)}`,
+    detail_link: value.detail_link,
   };
 
   catalog.push(newGame);
@@ -173,6 +213,17 @@ app.delete("/api/catalog/:id", (req, res) => {
     success: true,
     game: deletedGame,
   });
+});
+
+app.use((err, req, res, next) => {
+  if (err) {
+    return res.status(400).json({
+      success: false,
+      errors: [err.message || "Upload failed."],
+    });
+  }
+
+  next();
 });
 
 app.listen(3001, () => {
