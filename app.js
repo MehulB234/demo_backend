@@ -158,6 +158,25 @@ app.post("/api/catalog", (req, res) => {
   });
 });
 
+app.delete("/api/catalog/:id", (req, res) => {
+  const gameId = parseInt(req.params.id);
+  const gameIndex = catalog.findIndex((game) => game._id === gameId);
+
+  if (gameIndex === -1) {
+    return res.status(404).json({
+      success: false,
+      message: "Game not found",
+    });
+  }
+
+  const deletedGame = catalog.splice(gameIndex, 1)[0];
+
+  res.json({
+    success: true,
+    game: deletedGame,
+  });
+});
+
 app.listen(3001, () => {
   console.log("Server is up and running");
 });
