@@ -1,23 +1,14 @@
+
 const express = require("express");
 const cors = require("cors");
-const multer = require("multer");
 const Joi = require("joi");
+const path = require("path");
 
 const app = express();
+
 app.use(express.static("public"));
 app.use(express.json());
 app.use(cors());
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "./public/images/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
-});
-
-const upload = multer({ storage });
 
 let catalog = [
   {
@@ -129,12 +120,16 @@ app.get("/api/catalog", (req, res) => {
 });
 
 app.get("/api/catalog/:id", (req, res) => {
-  const foundCatalog = catalog.find((item) => item._id === parseInt(req.params.id));
+  const foundCatalog = catalog.find(
+    (item) => item._id === parseInt(req.params.id)
+  );
   res.send(foundCatalog);
 });
 
 app.post("/api/catalog", (req, res) => {
-  const { error, value } = gameSchema.validate(req.body, { abortEarly: false });
+  const { error, value } = gameSchema.validate(req.body, {
+    abortEarly: false,
+  });
 
   if (error) {
     return res.status(400).json({
@@ -143,9 +138,12 @@ app.post("/api/catalog", (req, res) => {
     });
   }
 
+  const normalizedImageName = path.basename(value.img_name.trim());
+
   const newGame = {
     _id: catalog.length ? Math.max(...catalog.map((game) => game._id)) + 1 : 1,
     ...value,
+    img_name: normalizedImageName,
     price: Number(value.price),
     price_display: `$${Number(value.price).toFixed(2)}`,
   };
