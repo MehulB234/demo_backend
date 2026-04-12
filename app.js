@@ -17,9 +17,7 @@ const storage = multer.diskStorage({
     cb(null, "./public/images/");
   },
   filename: (req, file, cb) => {
-    const safeName = path
-      .basename(file.originalname)
-      .replace(/\s+/g, "_");
+    const safeName = path.basename(file.originalname).replace(/\s+/g, "_");
     cb(null, `${Date.now()}-${safeName}`);
   },
 });
@@ -186,6 +184,7 @@ app.post("/api/catalog", upload.single("image"), (req, res) => {
     price: Number(value.price),
     price_display: `$${Number(value.price).toFixed(2)}`,
     detail_link: value.detail_link,
+    isUserAdded: true,
   };
 
   catalog.push(newGame);
