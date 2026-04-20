@@ -12,9 +12,11 @@ app.use(express.static("public"));
 app.use(express.json());
 app.use(cors());
 
+const publicImagesDir = path.join(__dirname, "public", "images");
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "./public/images/");
+    cb(null, publicImagesDir);
   },
   filename: (req, file, cb) => {
     const safeName = path.basename(file.originalname).replace(/\s+/g, "_");
@@ -126,7 +128,7 @@ let catalog = [
   },
 ];
 
-const gameSchema = Joi.object({
+const baseGameSchema = Joi.object({
   title: Joi.string().trim().min(2).max(60).required(),
   img_alt: Joi.string().trim().min(2).max(100).required(),
   platform: Joi.string().valid("PlayStation", "Xbox", "PC").required(),
@@ -137,13 +139,21 @@ const gameSchema = Joi.object({
   detail_link: Joi.string().trim().allow("").required(),
 });
 
-const deleteUploadedFile = (filePath) => {
-  if (!filePath) return;
+const editGameSchema = baseGameSchema.keys({
+  currentImageName: Joi.string().trim().min(1).required(),
+});
+
+const deleteUploadedFile = (imageName) => {
+  if (!imageName || imageName.startsWith("/")) return;
+
+  const filePath = path.join(publicImagesDir, imageName);
 
   try {
-    fs.unlinkSync(filePath);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   } catch (err) {
-    console.warn("Could not delete uploaded file:", err.message);
+    console.warn("Could not delete uploaded image:", err.message);
   }
 };
 
@@ -157,20 +167,28 @@ app.get("/api/catalog/:id", (req, res) => {
 });
 
 app.post("/api/catalog", upload.single("image"), (req, res) => {
-  const { error, value } = gameSchema.validate(req.body, { abortEarly: false });
+  const errors = [];
 
   if (!req.file) {
-    return res.status(400).json({
-      success: false,
-      errors: ["Image file is required."],
-    });
+    errors.push("Image file is required.");
   }
 
+  const { error, value } = baseGameSchema.validate(req.body, {
+    abortEarly: false,
+  });
+
   if (error) {
-    deleteUploadedFile(req.file.path);
+    errors.push(...error.details.map((detail) => detail.message));
+  }
+
+  if (errors.length > 0) {
+    if (req.file) {
+      deleteUploadedFile(req.file.filename);
+    }
+
     return res.status(400).json({
       success: false,
-      errors: error.details.map((detail) => detail.message),
+      errors,
     });
   }
 
@@ -184,7 +202,6 @@ app.post("/api/catalog", upload.single("image"), (req, res) => {
     price: Number(value.price),
     price_display: `$${Number(value.price).toFixed(2)}`,
     detail_link: value.detail_link,
-    isUserAdded: true,
   };
 
   catalog.push(newGame);
@@ -192,6 +209,62 @@ app.post("/api/catalog", upload.single("image"), (req, res) => {
   res.status(201).json({
     success: true,
     game: newGame,
+  });
+});
+
+app.put("/api/catalog/:id", upload.single("image"), (req, res) => {
+  const { error, value } = editGameSchema.validate(req.body, {
+    abortEarly: false,
+  });
+
+  if (error) {
+    if (req.file) {
+      deleteUploadedFile(req.file.filename);
+    }
+
+    return res.status(400).json({
+      success: false,
+      errors: error.details.map((detail) => detail.message),
+    });
+  }
+
+  const gameId = parseInt(req.params.id);
+  const gameIndex = catalog.findIndex((game) => game._id === gameId);
+
+  if (gameIndex === -1) {
+    if (req.file) {
+      deleteUploadedFile(req.file.filename);
+    }
+
+    return res.status(404).json({
+      success: false,
+      message: "Game not found",
+    });
+  }
+
+  const existingGame = catalog[gameIndex];
+
+  if (req.file) {
+    deleteUploadedFile(existingGame.img_name);
+  }
+
+  const updatedGame = {
+    ...existingGame,
+    title: value.title,
+    img_name: req.file ? req.file.filename : value.currentImageName,
+    img_alt: value.img_alt,
+    platform: value.platform,
+    genre: value.genre,
+    price: Number(value.price),
+    price_display: `$${Number(value.price).toFixed(2)}`,
+    detail_link: value.detail_link,
+  };
+
+  catalog[gameIndex] = updatedGame;
+
+  res.status(200).json({
+    success: true,
+    game: updatedGame,
   });
 });
 
@@ -207,8 +280,9 @@ app.delete("/api/catalog/:id", (req, res) => {
   }
 
   const deletedGame = catalog.splice(gameIndex, 1)[0];
+  deleteUploadedFile(deletedGame.img_name);
 
-  res.json({
+  res.status(200).json({
     success: true,
     game: deletedGame,
   });
