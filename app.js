@@ -1,10 +1,15 @@
-
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
 const Joi = require("joi");
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
+require("dotenv").config();
+
+const Game = require("./models/Game");
+
+const seedGames = require("./data/catalog");
 
 const app = express();
 
@@ -13,6 +18,10 @@ app.use(express.json());
 app.use(cors());
 
 const publicImagesDir = path.join(__dirname, "public", "images");
+
+if (!fs.existsSync(publicImagesDir)) {
+  fs.mkdirSync(publicImagesDir, { recursive: true });
+}
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -34,99 +43,6 @@ const upload = multer({
     }
   },
 });
-
-let catalog = [
-  {
-    _id: 1,
-    title: "Elden Ring",
-    img_name: "/csce242/project/homepage/images/EldenRing.png",
-    img_alt: "Elden Ring cover",
-    platform: "PlayStation",
-    genre: "RPG",
-    price: 59.99,
-    price_display: "$59.99",
-    detail_link: "/csce242/project/part7/EldenRing/index.html",
-  },
-  {
-    _id: 2,
-    title: "Call of Duty",
-    img_name: "/csce242/project/homepage/images/CallOfDuty.png",
-    img_alt: "Call of Duty cover",
-    platform: "Xbox",
-    genre: "Shooter",
-    price: 59.99,
-    price_display: "$59.99",
-    detail_link: "/csce242/project/part7/CallOfDuty/index.html",
-  },
-  {
-    _id: 3,
-    title: "Cyberpunk 2077",
-    img_name: "/csce242/project/homepage/images/Cyberpunk2077.png",
-    img_alt: "Cyberpunk 2077 cover",
-    platform: "PC",
-    genre: "Action / RPG",
-    price: 49.99,
-    price_display: "$49.99",
-    detail_link: "/csce242/project/part7/Cyberpunk2077/index.html",
-  },
-  {
-    _id: 4,
-    title: "FC 26",
-    img_name: "/csce242/project/homepage/images/FC26.png",
-    img_alt: "FC 26 cover",
-    platform: "PlayStation",
-    genre: "Sports",
-    price: 69.99,
-    price_display: "$69.99",
-    detail_link: "/csce242/project/part7/FC26/index.html",
-    media_type: "video",
-    trailer_id: "TSi0iJYSQ24",
-  },
-  {
-    _id: 5,
-    title: "Assassin's Creed",
-    img_name: "/csce242/project/part7/Catalog/Images/Assassin.png",
-    img_alt: "Assassin's Creed cover",
-    platform: "Xbox",
-    genre: "Action / Adventure",
-    price: 54.99,
-    price_display: "$54.99",
-    detail_link: "/csce242/project/part7/AssassinsCreed/index.html",
-  },
-  {
-    _id: 6,
-    title: "Minecraft",
-    img_name: "/csce242/project/part7/Catalog/Images/Minecraft.png",
-    img_alt: "Minecraft cover",
-    platform: "PC",
-    genre: "Sandbox",
-    price: 29.99,
-    price_display: "$29.99",
-    detail_link: "/csce242/project/part7/Minecraft/index.html",
-  },
-  {
-    _id: 7,
-    title: "God of War",
-    img_name: "/csce242/project/part7/Catalog/Images/GodOfWar.png",
-    img_alt: "God of War cover",
-    platform: "PlayStation",
-    genre: "Action",
-    price: 59.99,
-    price_display: "$59.99",
-    detail_link: "/csce242/project/part7/GodOfWar/index.html",
-  },
-  {
-    _id: 8,
-    title: "Halo Infinite",
-    img_name: "/csce242/project/part7/Catalog/Images/Halo.png",
-    img_alt: "Halo Infinite cover",
-    platform: "Xbox",
-    genre: "Shooter",
-    price: 59.99,
-    price_display: "$59.99",
-    detail_link: "/csce242/project/part7/Halo/index.html",
-  },
-];
 
 const baseGameSchema = Joi.object({
   title: Joi.string().trim().min(2).max(60).required(),
@@ -157,16 +73,62 @@ const deleteUploadedFile = (imageName) => {
   }
 };
 
-app.get("/api/catalog", (req, res) => {
-  res.send(catalog);
+async function seedDatabaseIfEmpty() {
+  const count = await Game.countDocuments();
+
+  if (count > 0) {
+    console.log("Database already has games. Skipping seed.");
+    return;
+  }
+
+  const formattedGames = seedGames.map((game) => ({
+    title: game.title,
+    img_name: game.img_name,
+    img_alt: game.img_alt,
+    platform: game.platform,
+    genre: game.genre,
+    price: Number(game.price),
+    price_display: game.price_display || `$${Number(game.price).toFixed(2)}`,
+    detail_link: game.detail_link || "",
+  }));
+
+  await Game.insertMany(formattedGames);
+  console.log("Seeded MongoDB from JSON data.");
+}
+
+app.get("/api/catalog", async (req, res) => {
+  try {
+    const games = await Game.find().sort({ createdAt: 1 });
+    res.send(games);
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch games.",
+    });
+  }
 });
 
-app.get("/api/catalog/:id", (req, res) => {
-  const foundCatalog = catalog.find((item) => item._id === parseInt(req.params.id));
-  res.send(foundCatalog);
+app.get("/api/catalog/:id", async (req, res) => {
+  try {
+    const game = await Game.findById(req.params.id);
+
+    if (!game) {
+      return res.status(404).json({
+        success: false,
+        message: "Game not found",
+      });
+    }
+
+    res.send(game);
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch game.",
+    });
+  }
 });
 
-app.post("/api/catalog", upload.single("image"), (req, res) => {
+app.post("/api/catalog", upload.single("image"), async (req, res) => {
   const errors = [];
 
   if (!req.file) {
@@ -192,27 +154,37 @@ app.post("/api/catalog", upload.single("image"), (req, res) => {
     });
   }
 
-  const newGame = {
-    _id: catalog.length ? Math.max(...catalog.map((game) => game._id)) + 1 : 1,
-    title: value.title,
-    img_name: req.file.filename,
-    img_alt: value.img_alt,
-    platform: value.platform,
-    genre: value.genre,
-    price: Number(value.price),
-    price_display: `$${Number(value.price).toFixed(2)}`,
-    detail_link: value.detail_link,
-  };
+  try {
+    const newGame = new Game({
+      title: value.title,
+      img_name: req.file.filename,
+      img_alt: value.img_alt,
+      platform: value.platform,
+      genre: value.genre,
+      price: Number(value.price),
+      price_display: `$${Number(value.price).toFixed(2)}`,
+      detail_link: value.detail_link,
+    });
 
-  catalog.push(newGame);
+    await newGame.save();
 
-  res.status(201).json({
-    success: true,
-    game: newGame,
-  });
+    res.status(201).json({
+      success: true,
+      game: newGame,
+    });
+  } catch (err) {
+    if (req.file) {
+      deleteUploadedFile(req.file.filename);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to save game.",
+    });
+  }
 });
 
-app.put("/api/catalog/:id", upload.single("image"), (req, res) => {
+app.put("/api/catalog/:id", upload.single("image"), async (req, res) => {
   const { error, value } = editGameSchema.validate(req.body, {
     abortEarly: false,
   });
@@ -228,64 +200,76 @@ app.put("/api/catalog/:id", upload.single("image"), (req, res) => {
     });
   }
 
-  const gameId = parseInt(req.params.id);
-  const gameIndex = catalog.findIndex((game) => game._id === gameId);
+  try {
+    const existingGame = await Game.findById(req.params.id);
 
-  if (gameIndex === -1) {
+    if (!existingGame) {
+      if (req.file) {
+        deleteUploadedFile(req.file.filename);
+      }
+
+      return res.status(404).json({
+        success: false,
+        message: "Game not found",
+      });
+    }
+
+    if (req.file) {
+      deleteUploadedFile(existingGame.img_name);
+      existingGame.img_name = req.file.filename;
+    } else {
+      existingGame.img_name = value.currentImageName;
+    }
+
+    existingGame.title = value.title;
+    existingGame.img_alt = value.img_alt;
+    existingGame.platform = value.platform;
+    existingGame.genre = value.genre;
+    existingGame.price = Number(value.price);
+    existingGame.price_display = `$${Number(value.price).toFixed(2)}`;
+    existingGame.detail_link = value.detail_link;
+
+    await existingGame.save();
+
+    res.status(200).json({
+      success: true,
+      game: existingGame,
+    });
+  } catch (err) {
     if (req.file) {
       deleteUploadedFile(req.file.filename);
     }
 
-    return res.status(404).json({
+    res.status(500).json({
       success: false,
-      message: "Game not found",
+      message: "Failed to update game.",
     });
   }
-
-  const existingGame = catalog[gameIndex];
-
-  if (req.file) {
-    deleteUploadedFile(existingGame.img_name);
-  }
-
-  const updatedGame = {
-    ...existingGame,
-    title: value.title,
-    img_name: req.file ? req.file.filename : value.currentImageName,
-    img_alt: value.img_alt,
-    platform: value.platform,
-    genre: value.genre,
-    price: Number(value.price),
-    price_display: `$${Number(value.price).toFixed(2)}`,
-    detail_link: value.detail_link,
-  };
-
-  catalog[gameIndex] = updatedGame;
-
-  res.status(200).json({
-    success: true,
-    game: updatedGame,
-  });
 });
 
-app.delete("/api/catalog/:id", (req, res) => {
-  const gameId = parseInt(req.params.id);
-  const gameIndex = catalog.findIndex((game) => game._id === gameId);
+app.delete("/api/catalog/:id", async (req, res) => {
+  try {
+    const deletedGame = await Game.findByIdAndDelete(req.params.id);
 
-  if (gameIndex === -1) {
-    return res.status(404).json({
+    if (!deletedGame) {
+      return res.status(404).json({
+        success: false,
+        message: "Game not found",
+      });
+    }
+
+    deleteUploadedFile(deletedGame.img_name);
+
+    res.status(200).json({
+      success: true,
+      game: deletedGame,
+    });
+  } catch (err) {
+    res.status(500).json({
       success: false,
-      message: "Game not found",
+      message: "Failed to delete game.",
     });
   }
-
-  const deletedGame = catalog.splice(gameIndex, 1)[0];
-  deleteUploadedFile(deletedGame.img_name);
-
-  res.status(200).json({
-    success: true,
-    game: deletedGame,
-  });
 });
 
 app.use((err, req, res, next) => {
@@ -299,6 +283,18 @@ app.use((err, req, res, next) => {
   next();
 });
 
-app.listen(3001, () => {
-  console.log("Server is up and running");
-});
+const PORT = process.env.PORT || 3001;
+
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(async () => {
+    console.log("Connected to MongoDB");
+    await seedDatabaseIfEmpty();
+
+    app.listen(PORT, () => {
+      console.log(`Server is up and running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+  });
